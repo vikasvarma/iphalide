@@ -1,0 +1,54 @@
+# CMake preferences:
+cmake_minimum_required(VERSION 3.0.0)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Project definition:
+project(
+    IPHALIDE 
+    VERSION 0.1.0
+)
+
+# Find dependent libraries:
+find_library(HALIDE_LIB Halide halide/lib)
+find_library(PNG_LIB png /usr/local/libpng/lib)
+find_library(JPEG_LIB jpeg /usr/local/libjpeg/lib)
+
+message(STATUS "Halide library: ${HALIDE_LIB}")
+message(STATUS "PNG library: ${PNG_LIB}")
+message(STATUS "JPEG library: ${JPEG_LIB}")
+
+# Create iphalide module static library:
+add_library(iphalide SHARED
+    src/bm3d.cpp
+    src/conv.cpp
+    src/ssim.cpp
+)
+
+target_include_directories(iphalide PRIVATE include)
+target_include_directories(iphalide PRIVATE src)
+target_include_directories(iphalide PRIVATE halide/include)
+target_include_directories(iphalide PRIVATE halide/share/Halide/tools)
+target_include_directories(iphalide PRIVATE /usr/local/include)
+
+target_link_libraries(iphalide PRIVATE ${PNG_LIB})
+target_link_libraries(iphalide PRIVATE ${JPEG_LIB})
+target_link_libraries(iphalide PRIVATE ${HALIDE_LIB})
+
+target_compile_features(iphalide PUBLIC)
+
+# Testing setup ----------------------------------------------------------------
+add_executable(tests
+    test/tconv.cpp
+)
+
+target_link_libraries(tests PUBLIC iphalide)
+target_link_libraries(tests PRIVATE ${PNG_LIB})
+target_link_libraries(tests PRIVATE ${JPEG_LIB})
+target_link_libraries(tests PRIVATE ${HALIDE_LIB})
+
+target_include_directories(tests PRIVATE include)
+target_include_directories(tests PRIVATE halide/include)
+target_include_directories(tests PRIVATE halide/share/Halide/tools)
+target_include_directories(tests PRIVATE /usr/local/include)

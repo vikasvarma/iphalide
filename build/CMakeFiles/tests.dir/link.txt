@@ -1,0 +1,1 @@
+/Library/Developer/CommandLineTools/usr/bin/c++ -O3 -DNDEBUG -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.3.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/tests.dir/test/main.cpp.o -o tests  libconv.a libssim.a /usr/local/lib/libHalide.dylib /usr/local/lib/libpng.dylib /usr/local/lib/libjpeg.dylib libconv.runtime.a libssim.runtime.a 

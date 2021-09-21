@@ -1,0 +1,158 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11
+					]
+				}
+			],
+			"name" : "Release",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "IPHALIDE",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "acc_gen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-acc_gen-Release-ea9ce4457502b65bdb87.json",
+					"name" : "acc_gen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "conv::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-conv-Release-9ba26dcc44dcd5bf5e94.json",
+					"name" : "conv",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "conv.runtime::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-conv.runtime-Release-8ca2661d4830e85f43ea.json",
+					"name" : "conv.runtime",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "conv.update::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-conv.update-Release-731f05cd59a7166575bf.json",
+					"name" : "conv.update",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "conv_halide::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-conv_halide-Release-f039b2cb0f4143d13e98.json",
+					"name" : "conv_halide",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "intrinsics_gen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-intrinsics_gen-Release-50fbe087a98b5f5d28e7.json",
+					"name" : "intrinsics_gen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "omp_gen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-omp_gen-Release-2115b9149f6eb2575273.json",
+					"name" : "omp_gen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ssim::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ssim-Release-962d29b2e372ca3fe8dd.json",
+					"name" : "ssim",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ssim.runtime::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ssim.runtime-Release-44e9fb366a863e5d2353.json",
+					"name" : "ssim.runtime",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ssim.update::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ssim.update-Release-26ca72f76f71b2dad7af.json",
+					"name" : "ssim.update",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ssim_halide::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ssim_halide-Release-6f691db0ce8b529bfaad.json",
+					"name" : "ssim_halide",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "tests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-tests-Release-b4da634592d17890a791.json",
+					"name" : "tests",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/Users/vikasvarma/Documents/Development/iphalide/build",
+		"source" : "/Users/vikasvarma/Documents/Development/iphalide"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 1
+	}
+}
