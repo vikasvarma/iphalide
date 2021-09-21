@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc libconv_halide.runtime.a conv_halide.runtime.o
-/Library/Developer/CommandLineTools/usr/bin/ranlib libconv_halide.runtime.a

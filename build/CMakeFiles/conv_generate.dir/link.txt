@@ -1,1 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/c++ -O3 -DNDEBUG -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.3.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/conv_generate.dir/src/conv.cpp.o CMakeFiles/conv_generate.dir/usr/local/share/tools/GenGen.cpp.o -o conv_generate  -Wl,-rpath,/usr/local/lib /usr/local/lib/libHalide.12.0.1.dylib 

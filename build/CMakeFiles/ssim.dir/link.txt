@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc libssim.a ssim.o
-/Library/Developer/CommandLineTools/usr/bin/ranlib libssim.a

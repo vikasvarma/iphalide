@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc libconv.a conv.o
-/Library/Developer/CommandLineTools/usr/bin/ranlib libconv.a
