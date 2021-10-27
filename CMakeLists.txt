@@ -1,3 +1,5 @@
+# cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/usr/local/Cellar/llvm/12.0.1/lib/cmake/llvm -install ..
+
 # CMake preferences:
 cmake_minimum_required(VERSION 3.0.0)
 set(CMAKE_CXX_STANDARD 17)
@@ -13,13 +15,25 @@ project(
 find_package(Halide REQUIRED)
 
 # Find dependent libraries:
-find_library(HALIDE_LIB Halide /usr/local/lib)
-find_library(PNG_LIB png /usr/local/libpng/lib)
-find_library(JPEG_LIB jpeg /usr/local/libjpeg/lib)
+find_library(HALIDE_LIB Halide)
+find_library(PNG_LIB png)
+find_library(JPEG_LIB jpeg)
 
 message(STATUS "Halide library: ${HALIDE_LIB}")
 message(STATUS "PNG library: ${PNG_LIB}")
 message(STATUS "JPEG library: ${JPEG_LIB}")
+
+# Create utils library:
+add_library(extern_utils STATIC src/util.cpp)
+set_target_properties(extern_utils PROPERTIES LINKER_LANGUAGE CXX)
+target_include_directories(extern_utils 
+    PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    /usr/local/include
+)
+target_link_libraries(extern_utils PRIVATE ${HALIDE_LIB})
+
+find_library(UTILS_LIB extern_utils)
 
 # Create conv generator executable:
 add_executable(conv_halide src/conv.cpp)
@@ -41,6 +55,37 @@ add_halide_library(ssim FROM ssim_halide
                    PARAMS auto_schedule=true
                    AUTOSCHEDULER Halide::Mullapudi2016)
 
+# Create 2D DCT executable and library:
+add_executable(dct2d_halide src/dct2d.cpp)
+target_link_libraries(dct2d_halide PRIVATE Halide::Generator)
+add_halide_library(dct2d FROM dct2d_halide
+                   GENERATOR dct2d_generator
+                   PARAMS auto_schedule=true
+                   AUTOSCHEDULER Halide::Mullapudi2016)
+
+add_executable(idct2d_halide src/idct2d.cpp)
+target_link_libraries(idct2d_halide PRIVATE Halide::Generator)
+add_halide_library(idct2d FROM idct2d_halide
+                   GENERATOR idct2d_generator
+                   PARAMS auto_schedule=false
+                   AUTOSCHEDULER Halide::Mullapudi2016)
+
+# Create bm3d generator executable:
+add_executable(bm3d_halide src/bm3d.cpp)
+target_link_libraries(bm3d_halide PRIVATE
+     Halide::Generator
+     ssim
+     conv
+     dct2d
+     idct2d
+     extern_utils
+)
+
+# Use genreator to create a library:
+add_halide_library(bm3d FROM bm3d_halide
+                   GENERATOR bm3d_generator
+                   PARAMS auto_schedule=true
+                   AUTOSCHEDULER Halide::Mullapudi2016)
 
 # Testing setup ----------------------------------------------------------------
 add_executable(tests
@@ -50,6 +95,10 @@ add_executable(tests
 target_link_libraries(tests PRIVATE
     conv
     ssim
+    dct2d
+    idct2d
+    bm3d
+    extern_utils
     ${HALIDE_LIB}
     ${PNG_LIB}
     ${JPEG_LIB}
