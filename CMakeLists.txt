@@ -70,22 +70,35 @@ add_halide_library(idct2d FROM idct2d_halide
                    PARAMS auto_schedule=false
                    AUTOSCHEDULER Halide::Mullapudi2016)
 
+#-------------------------------------------------------------------------------
 # Create bm3d generator executable:
-add_executable(bm3d_halide src/bm3d.cpp)
+add_executable(bm3d_halide src/bm3d/bm3d_halide.cpp)
 target_link_libraries(bm3d_halide PRIVATE
      Halide::Generator
-     ssim
-     conv
-     dct2d
-     idct2d
      extern_utils
 )
 
 # Use genreator to create a library:
-add_halide_library(bm3d FROM bm3d_halide
-                   GENERATOR bm3d_generator
-                   PARAMS auto_schedule=true
-                   AUTOSCHEDULER Halide::Mullapudi2016)
+add_halide_library(
+    blockdct FROM bm3d_halide
+    GENERATOR blockdct_generator
+    PARAMS auto_schedule=true
+    AUTOSCHEDULER Halide::Mullapudi2016
+)
+
+add_halide_library(
+    blockdist FROM bm3d_halide
+    GENERATOR blockdist_generator
+    PARAMS auto_schedule=true
+    AUTOSCHEDULER Halide::Mullapudi2016
+)
+
+add_halide_library(
+    argsort FROM bm3d_halide
+    GENERATOR argsort_generator
+    PARAMS auto_schedule=true
+    AUTOSCHEDULER Halide::Mullapudi2016
+)
 
 # Testing setup ----------------------------------------------------------------
 add_executable(tests
@@ -97,7 +110,9 @@ target_link_libraries(tests PRIVATE
     ssim
     dct2d
     idct2d
-    bm3d
+    blockdct
+    blockdist
+    argsort
     extern_utils
     ${HALIDE_LIB}
     ${PNG_LIB}

@@ -5,7 +5,9 @@
 #include "ssim.h"
 #include "dct2d.h"
 #include "idct2d.h"
-#include "bm3d.h"
+#include "blockdct.h"
+#include "searchblocks.h"
+#include "argsort.h"
 #include <math.h>
 
 using namespace Halide;
@@ -82,17 +84,55 @@ void bm3d_()
     };
 
     Halide::Runtime::Buffer<uint8_t> noisy(I);
-    Halide::Runtime::Buffer<uint16_t> blocks(144,2);
-    Halide::Runtime::Buffer<float> distances(144);
-    double time = Halide::Tools::benchmark(2, 5, [&]() {
-        bm3d(noisy, blocks, distances);
+    Halide::Runtime::Buffer<double> dct(12,12,4,4);
+    Halide::Runtime::Buffer<double> sim(2,2,8,8);
+    Halide::Runtime::Buffer<uint8_t> sortstatus(2,2);
+    double t0 = Halide::Tools::benchmark(2, 5, [&]() {
+        blockdct(noisy, 4, dct);
     });
 
-    for (int n = 0; n < 99; n++){
-        std::cout << "(" << blocks(n,0) << "," << blocks(n,1) << "): " << distances(n) << "\n";
+    double t1 = Halide::Tools::benchmark(2, 5, [&]() {
+        searchblocks(dct, 4, 8, sim);
+    });
+
+    double t2 = Halide::Tools::benchmark(2, 5, [&]() {
+        argsort(sim, sortstatus);
+    });
+
+    // Check results:
+    double exp;
+    for(int sx = 0; sx < 1; sx ++){
+        for(int sy = 0; sy < 1; sy ++){
+            int xmin = sx * 8;
+            int ymin = sy * 8;
+            int xmax = xmin + 8;
+            int ymax = ymin + 8;
+            int xref = xmin + 2;
+            int yref = ymin + 2;
+
+            for (int x = xmin; x < xmax; x++){
+                for (int y = ymin; y < ymax; y++){
+                    exp = 0;
+                    for (int bx = 0; bx < 4; bx++){
+                        for (int by = 0; by < 4; by++){
+                            exp += pow(dct(x,y,bx,by) - dct(xref,yref,bx,by),2);
+                        }
+                    }
+                    exp /= pow(4,2);
+
+                    if (exp != sim(sx,sy,x,y))
+                    {
+                        printf("Error(%d,%d,%d,%d): act[%f] exp[%f]\n", 
+                               sx,sy,x,y, sim(sx,sy,x,y), exp);
+                    }
+                }    
+            }
+        }
     }
 
-    printf("LUT Computed in: [%f msec]\n", time);
+    printf("LUT Computed in: [%f msec]\n", t0);
+    printf(" Search done in: [%f msec]\n", t1);
+    printf("Sorting done in: [%f msec]\n", t2);
 }
 
 int main(){

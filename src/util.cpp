@@ -11,9 +11,13 @@ extern "C" int argsort_buffer(
 ){
     if (in->is_bounds_query()) {
         in->dim[0].min = out->dim[0].min;
-        in->dim[0].extent = out->dim[0].extent/2;
+        in->dim[0].extent = out->dim[0].extent;
 
     } else {
+
+        Halide::Runtime::Buffer<float> in_buf(*in);
+        Halide::Runtime::Buffer<float> out_buf(*out);
+
         float *in_start = (float *)in->host;
         float *out_start = (float *)out->host;
 
@@ -30,9 +34,30 @@ extern "C" int argsort_buffer(
 
         // store index and sorted value together:
         for (auto ptr = 0; ptr < in->dim[0].extent; ptr++){
-            *(out_start + 2*ptr) = index[ptr];
-            *(out_start + 2*ptr + 1) = *(in_start + index[ptr]);
+            *(out_start + ptr) = index[ptr];
         }
     }
     return 0;
 }
+
+extern "C" class SearchSpace()
+{
+    public:
+        Halide::Runtime::Buffer<uint16_t> blocks;
+        Halide::Tuple window;
+        int dim;
+
+        void SearchSpace(Halide::Tuple index, int S, Halide::Tuple imsize)
+        {
+            // Construct the object with specified origin and search space 
+            // dimensions:
+            dim = S;
+            int xmin (max(0,index[0]*S));
+            int ymin (max(0,index[1]*S));
+
+            window = {
+                xmin, ymin,
+                min(imsize[0]-1, xmin + S - 1), min(imsize[1]-1, ymin + S - 1)
+            };
+        }
+};
