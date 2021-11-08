@@ -9,29 +9,6 @@
 using namespace Halide;
 using namespace std;
 
-#define PROFILE = "REGULAR"
-
-struct REGULAR 
-{
-    struct step1
-    {
-        int block_size = 8;
-        int step_size = 3;
-        int search_win = 39;
-        int thr = 2500;
-        int max_match = 16;
-    } STEP1;
-
-    struct step2
-    {
-        int block_size = 8;
-        int step_size = 3;
-        int search_win = 39;
-        int thr = 400;
-        int max_match = 32;
-    } STEP2;
-};
-
 /**
  * @brief BLOCK MATCHING & 3D DENOISING
  * 
@@ -41,51 +18,67 @@ struct REGULAR
 class bm3d : public Generator<bm3d>
 {
     public:
-        Input<Buffer<uint8_t>> noisy{"noisy",2};
-        Output<Buffer<float>> matches{"matches",2};
+        Input<Buffer<uint8_t>> image{"image",2};
+        Input<uint8_t> B{"block_size"};
+        Input<uint8_t> S{"block_stride"};
+        Input<uint8_t> W{"search_window"};
+        Output<Buffer<double>> output{"output",4};
+        Output<Buffer<uint16_t>> order{"order",4};
 
         // Image width and height: `W` `H`
-        Expr W, H, B;
+        Expr M, N;
 
         void generate()
         {
             // Populate state variables for image dimensions:
-            W = noisy.width();
-            H = noisy.height();
-            B = Expr(4);
+            M = image.dim(0).extent();
+            N = image.dim(1).extent();
 
-            // Edges should be replicated:
-            Func I = BoundaryConditions::repeat_edge(noisy);
-            Func dct = block_dct2d(I,Expr(4));
+            // Replicate edges:
+            Func img = BoundaryConditions::repeat_edge(image);
 
-            // Hard-threshold the DCT coefficients:
-            dct(x,y,p,q) = select(abs(dct(x,y,p,q)) < 0, 0, dct(x,y,p,q));
+            // Compute 2D dct block lookup table:
+            Func LUT = blockdct(img);
+            Var wx{"wx"}, wy{"Wy"};
             
-            // Find the matches for a specific block:
-            Halide::Runtime::Buffer<float> distance = 
-            Halide::Runtime::Buffer<float>(8,8);
-
-            matches(x,y) = distance(x,y);
-            matches.trace_stores();
+            //Compute block distances:
+            Func scores{"scores"};
+            RDom b(0,B,0,B,"block");
+            scores(x,y,wx,wy) = sum(b, 
+                pow(
+                    LUT(x*S, y*S, b.x, b.y) - 
+                    LUT(x*S + wx, y*S + wy, b.x, b.y),
+                    2
+                )
+            )/pow(B,2);
             
-            //matches(x,y) = block_matching(dct, x*B, y*B, 8, 4, 10);
+            // Sort buffer and return sort order:
+            Func sorted{"sorted"};
+            std::vector<ExternFuncArgument> args;
+            args.push_back(scores);
+            sorted.define_extern("argsort", {scores}, Float(64), 4);
+
+            // Realize output:
+            output(x,y,wx,wy) = scores(x,y,wx,wy);
+            order(x,y,wx,wy) = cast<uint16_t>(sorted(x,y,wx,wy));
         }
 
         void schedule()
         {
-            if (auto_schedule)
-            {
-                noisy.set_estimates({{0,12},{0,12}});
-                matches.set_estimates({{0,3},{0,3}});
+            if (auto_schedule) {
+                image.set_estimates({{0,12},{0,12}});
+                output.set_estimates({{0,4},{0,4},{0,6},{0,6}});
+                order.set_estimates({{0,4},{0,4},{0,6},{0,6}});
             } else {
-                matches.compute_root();
+                output.compute_root();
+                order.compute_root();
             }
         }
 
     private:
-        Var x{"x"}, y{"y"}, bx{"bx"}, by{"by"}, z{"z"}, p{"p"}, q{"q"};
+        Var x{"x"}, y{"y"}, z{"z"};
 
-        Func block_dct2d(Func I, Expr B)
+        Func dct2d(Func I)
         {
             /**
              * @brief Construct a LUT of DCT coefficients of all blocks in the 
@@ -96,15 +89,33 @@ class bm3d : public Generator<bm3d>
              * pixel coordinate of the block and <p,q> is the index of the 
              * (p,q) coefficient in the B-by-B coefficient matrix of the block.
              */
-            Func LUT {"LUT"};
 
+            // TODO - Separate both X,Y coefficient calculation (performance).
+            Func LUT {"LUT"};
+            Expr PI (M_PI);
+            RDom r(0,B,0,B,"block");
+            Var bx{"bx"}, by{"by"};
+            LUT(x,y,bx,by) = select(bx==0 || by==0, Expr(1/sqrt(2)), 1) *
+                             Expr(2.0f/B) * 
+                             sum(
+                                cos((PI*bx*(2*r.x+1))/(Expr(2*B))) *
+                                cos((PI*by*(2*r.y+1))/(Expr(2*B))) *
+                                I(x+r.x, y+r.y)
+                             );
+            return LUT;
+        }
+
+        Func blockdct(Func I)
+        {
             // Generate DCT for each block:
             // TODO - Separate both X,Y coefficient calculation (performance).
-            Expr PI (M_PI);
+            Func LUT {"LUT"};
+            Expr PI(M_PI);
             RDom b(0,B,0,B);
-            LUT(x,y,p,q) = Expr(2.0f/B) * sum(
-                cos((PI*p*(2*b.x+1))/(Expr(2*B))) *
-                cos((PI*q*(2*b.y+1))/(Expr(2*B))) *
+            Var bx{"bx"}, by{"by"};
+            LUT(x,y,bx,by) = Expr(2.0f/B) * sum(
+                cos((PI*bx*(2*b.x+1))/(Expr(2*B))) *
+                cos((PI*by*(2*b.y+1))/(Expr(2*B))) *
                 I(x+b.x, y+b.y)
             );
 
@@ -117,91 +128,6 @@ class bm3d : public Generator<bm3d>
             return LUT;
         }
 
-        Tuple get_search_window(
-            Expr xref,
-            Expr yref,
-            Expr window_size,
-            Expr block_size
-        ){
-            /** Construct search window reduction domain.
-             * @brief Construct a reduction domain that spans the extent of the 
-             * search window.
-             *      
-             *     * * * * * * * * * * xxxx
-             *     * * * * * * * * * *    x
-             *     * * * * * * * * * *    x
-             *     * * * * * @ * * * *    x
-             *     * * * * * * * * * *    x
-             *     * * * * * * * * * *    x
-             *     x                      x
-             *     xxxxxxxxxxxxxxxxxxxxxxxx
-             * 
-             *  * - Top left coordainte of the search block.
-             *  @ - Reference block top-left coordaintes.
-             *  x - Search extents.
-             */
-
-            Expr xmin, ymin, xmax, ymax;
-            xmin = xref - floor((window_size-block_size)/Expr(2.0));
-            ymin = yref - floor((window_size-block_size)/Expr(2.0));
-            xmax = xmin + window_size - 1;
-            ymax = ymin + window_size - 1;
-
-            Tuple window = {
-                max(0, xmin), max(0, ymin),
-                min(W - block_size + 1, xmax), min(H - block_size + 1, ymax)
-            };
-
-            return window;
-        }
-
-        /**
-        Tuple block_matching(
-            Func LUT,
-            Expr xref,
-            Expr yref,
-            Expr window_size,
-            Expr block_size,
-            Expr max_blocks
-        ){
-            /** Block matching routine for BM3D
-             * @brief Search the window space of <xref,yref> block to determine 
-             * similar blocks.
-             * 
-             * Returns the top-left block coordiantes that match with the 
-             * reference block.
-             
-
-            Func similar{"similar"};
-            
-            Tuple limits = get_search_window(xref,yref,window_size,block_size);
-            RDom block (0,block_size, 0,block_size);
-
-            // Compute distances:
-            Func distance(x,y) = 
-                sum(
-                    pow(
-                        LUT(xref,yref,block.x,block.y) - 
-                        LUT(
-                            window.x,
-                            window.y, 
-                            block.x,
-                            block.y
-                        ), 2
-                    )
-                ) / pow(window_size,2);
-
-            // sorted_dist calls the external C function to return the sorted 
-            // argmin order:
-            std::vector<ExternFuncArgument> args;
-            args.push_back(distance);
-            args.push_back(pow(window_size,2));
-            args.push_back(max_blocks);
-            similar.define_extern("argsort_buffer", args, Float(32), 1);
-
-            return similar;
-        }
-        */
 
 }; // END - BM3D
 

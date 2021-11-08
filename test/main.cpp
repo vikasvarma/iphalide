@@ -1,18 +1,14 @@
 #include "Halide.h"
 #include "halide_image_io.h"
 #include "halide_benchmark.h"
-#include "conv.h"
-#include "ssim.h"
-#include "dct2d.h"
-#include "idct2d.h"
-#include "blockdct.h"
-#include "searchblocks.h"
-#include "argsort.h"
+#include "bm3d.h"
+#include "util.h"
 #include <math.h>
 
 using namespace Halide;
 using namespace Halide::Tools;
 
+/**
 void ssim_(){
 
     // Load an image:
@@ -65,6 +61,7 @@ void dct2d_()
     });
     printf("2D IDCT Benchmark: [%gms]\n", d2 * 1e3);
 }
+*/
 
 void bm3d_()
 {
@@ -83,56 +80,38 @@ void bm3d_()
         {12,11,10,9,8,7,6,5,4,3,2,1}
     };
 
-    Halide::Runtime::Buffer<uint8_t> noisy(I);
-    Halide::Runtime::Buffer<double> dct(12,12,4,4);
-    Halide::Runtime::Buffer<double> sim(2,2,8,8);
-    Halide::Runtime::Buffer<uint8_t> sortstatus(2,2);
+    Halide::Runtime::Buffer<uint8_t> image(I);
+    Halide::Runtime::Buffer<double> scores(4,4,6,6);
+    Halide::Runtime::Buffer<uint16_t> order(4,4,6,6);
+
+    /**
+    Rdom rWin; //5x5
+    RDom bw; //4x4
+
+    scores(x,y,wx,wy) = sum(dct(b*x,b*y,bw.x, bw.y)-dct(x*b+rWin.x, y*b+rWin.y, bw.x,bw.y),'bw')
+    */
+
     double t0 = Halide::Tools::benchmark(2, 5, [&]() {
-        blockdct(noisy, 4, dct);
+        bm3d(image, 4, 4, 6, scores, order);
     });
 
-    double t1 = Halide::Tools::benchmark(2, 5, [&]() {
-        searchblocks(dct, 4, 8, sim);
-    });
+    printf("In test code: \n\n");
 
-    double t2 = Halide::Tools::benchmark(2, 5, [&]() {
-        argsort(sim, sortstatus);
-    });
-
-    // Check results:
-    double exp;
-    for(int sx = 0; sx < 1; sx ++){
-        for(int sy = 0; sy < 1; sy ++){
-            int xmin = sx * 8;
-            int ymin = sy * 8;
-            int xmax = xmin + 8;
-            int ymax = ymin + 8;
-            int xref = xmin + 2;
-            int yref = ymin + 2;
-
-            for (int x = xmin; x < xmax; x++){
-                for (int y = ymin; y < ymax; y++){
-                    exp = 0;
-                    for (int bx = 0; bx < 4; bx++){
-                        for (int by = 0; by < 4; by++){
-                            exp += pow(dct(x,y,bx,by) - dct(xref,yref,bx,by),2);
-                        }
-                    }
-                    exp /= pow(4,2);
-
-                    if (exp != sim(sx,sy,x,y))
-                    {
-                        printf("Error(%d,%d,%d,%d): act[%f] exp[%f]\n", 
-                               sx,sy,x,y, sim(sx,sy,x,y), exp);
-                    }
-                }    
+    for(int sx = 0; sx < 3; sx ++){
+        for(int sy = 0; sy < 3; sy ++){
+            printf("Distances[%d,%d]:\n",sx,sy);
+            for (int y = 0; y < 6; y++){
+                for (int x = 0; x < 6; x++){
+                    int ind = int(order(sx,sy,x,y));
+                    printf("%d | %.2f\n", ind, scores(sx,sy,ind%6,ind/6));
+                }
             }
+            printf("\n");
+            printf("\n");
         }
     }
 
-    printf("LUT Computed in: [%f msec]\n", t0);
-    printf(" Search done in: [%f msec]\n", t1);
-    printf("Sorting done in: [%f msec]\n", t2);
+    printf("BM3D Computed in: [%f msec]\n", t0);
 }
 
 int main(){
