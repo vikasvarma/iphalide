@@ -22,11 +22,13 @@ class bm3d : public Generator<bm3d>
         Input<uint8_t> B{"block_size"};
         Input<uint8_t> S{"block_stride"};
         Input<uint8_t> W{"search_window"};
-        Output<Buffer<double>> output{"output",4};
-        Output<Buffer<uint16_t>> order{"order",4};
+        Input<uint8_t> MAX{"max_blocks"};
+        Output<Buffer<uint16_t>> matches{"matches",3};
+        Output<Buffer<double>> estimate{"estimate",5};
 
         // Image width and height: `W` `H`
         Expr M, N;
+        Expr thr;
 
         void generate()
         {
@@ -34,11 +36,13 @@ class bm3d : public Generator<bm3d>
             M = image.dim(0).extent();
             N = image.dim(1).extent();
 
+            thr = Expr(2.7*25); // lambda * sigma
+
             // Replicate edges:
             Func img = BoundaryConditions::repeat_edge(image);
 
             // Compute 2D dct block lookup table:
-            Func LUT = blockdct(img);
+            Func LUT = dct2d(img);
             Var wx{"wx"}, wy{"Wy"};
             
             //Compute block distances:
@@ -49,29 +53,98 @@ class bm3d : public Generator<bm3d>
                     LUT(x*S, y*S, b.x, b.y) - 
                     LUT(x*S + wx, y*S + wy, b.x, b.y),
                     2
-                )
+                ),
+                "score-sum"
             )/pow(B,2);
             
             // Sort buffer and return sort order:
             Func sorted{"sorted"};
             std::vector<ExternFuncArgument> args;
             args.push_back(scores);
-            sorted.define_extern("argsort", {scores}, Float(64), 4);
+            sorted.define_extern("argsort", {scores}, UInt(16), 4);
 
-            // Realize output:
-            output(x,y,wx,wy) = scores(x,y,wx,wy);
-            order(x,y,wx,wy) = cast<uint16_t>(sorted(x,y,wx,wy));
+            Var mb,bx,by;
+
+            // Group similar blocks and perform 1-D DCT along z-dim:
+            Func blockgroup{"blockgroup"};
+            blockgroup(x,y,mb,bx,by) = LUT(
+                x*S + sorted(x,y,mb%W,mb/W)%W, 
+                y*S + sorted(x,y,mb%W,mb/W)/W,
+                bx, by
+            );
+
+            // Pick only the top N candidates for z-dim dct:
+            RDom rz(0,MAX,"rz");
+            RDom rb(0,B,"rb");
+            Expr PI (M_PI);
+            Func bdct3d{"bdct3d"};
+            bdct3d(x,y,mb,bx,by) = 
+                select(bx==0, Expr(sqrt(1/2.0)), Expr(1.0)) *
+                Expr(2.0f/MAX) * sum(
+                    cos((PI*mb*(2*rz.x+1))/(Expr(2*MAX))) *
+                    LUT(
+                        x*S + sorted(x,y,rz.x%W,rz.x/W)%W,
+                        y*S + sorted(x,y,rz.x%W,rz.x/W)/W,
+                        bx, by
+                    ),
+                    "z-dct-sum"
+                );
+            
+            // Hard-threshold the DCT coefficients:
+            //bdct3d(x,y,mb,bx,by) = select(
+            //    bdct3d(x,y,mb,bx,by) < thr,
+            //    bdct3d(x,y,mb,bx,by), 0
+            //);
+
+            // Perform 3-D inverse DCT:
+            Func idctx, idcty, idctz;
+            idctz(x,y,mb,bx,by) = 
+                round(sum( 
+                    select(rz > 0, 
+                        sqrt(Expr(2.0f/MAX)), 
+                        sqrt(Expr(1.0f/MAX))
+                    ) * 
+                    cos((PI*rz*(2*mb+1))/(2*MAX)) * 
+                    bdct3d(x,y,rz,bx,by),
+                    "idctz-sum"
+                ));
+            
+            idcty(x,y,mb,bx,by) = 
+                round(sum( 
+                    select(rb > 0, 
+                        sqrt(Expr(2.0f/B)), 
+                        sqrt(Expr(1.0f/B))
+                    ) * 
+                    cos((PI*rb*(2*by+1))/(2*B)) * 
+                    idctz(x,y,mb,bx,rb),
+                    "idcty-sum"
+                ));
+            
+            idctx(x,y,mb,bx,by) = 
+                round(sum( 
+                    select(rb > 0, 
+                        sqrt(Expr(2.0f/B)), 
+                        sqrt(Expr(1.0f/B))
+                    ) * 
+                    cos((PI*rb*(2*bx+1))/(2*B)) * 
+                    idcty(x,y,mb,rb,by),
+                    "idctx-sum"
+                ));
+
+            // Assign output:
+            estimate(x,y,mb,bx,by) = idctz(x,y,mb,bx,by);
+            matches(x,y,z) = sorted(x,y,z%W,z/W);
         }
 
         void schedule()
         {
             if (auto_schedule) {
                 image.set_estimates({{0,12},{0,12}});
-                output.set_estimates({{0,4},{0,4},{0,6},{0,6}});
-                order.set_estimates({{0,4},{0,4},{0,6},{0,6}});
+                matches.set_estimates({{0,4},{0,4},{0,36}});
+                estimate.set_estimates({{0,4},{0,4},{0,10},{0,4},{0,4}});
             } else {
-                output.compute_root();
-                order.compute_root();
+                matches.compute_root();
+                estimate.compute_root();
             }
         }
 
@@ -102,29 +175,7 @@ class bm3d : public Generator<bm3d>
                                 cos((PI*by*(2*r.y+1))/(Expr(2*B))) *
                                 I(x+r.x, y+r.y)
                              );
-            return LUT;
-        }
-
-        Func blockdct(Func I)
-        {
-            // Generate DCT for each block:
-            // TODO - Separate both X,Y coefficient calculation (performance).
-            Func LUT {"LUT"};
-            Expr PI(M_PI);
-            RDom b(0,B,0,B);
-            Var bx{"bx"}, by{"by"};
-            LUT(x,y,bx,by) = Expr(2.0f/B) * sum(
-                cos((PI*bx*(2*b.x+1))/(Expr(2*B))) *
-                cos((PI*by*(2*b.y+1))/(Expr(2*B))) *
-                I(x+b.x, y+b.y)
-            );
-
-            // Divide first row and col of each coefficient block by sqrt(2):
-            RDom br(0,1,0,B);
-            RDom bc(0,B,0,1);
-            LUT(x,y,br.x,br.y) = LUT(x,y,br.x,br.y)/Expr(sqrt(2));
-            LUT(x,y,bc.x,bc.y) = LUT(x,y,bc.x,bc.y)/Expr(sqrt(2));
-
+            LUT(x,y,0,0) = LUT(x,y,0,0)/Expr(sqrt(2));
             return LUT;
         }
 

@@ -19,7 +19,7 @@ extern "C" int argsort(
 
     } else {
         Halide::Runtime::Buffer<double> databuf(*data);
-        Halide::Runtime::Buffer<double> orderbuf(*order);
+        Halide::Runtime::Buffer<uint16_t> orderbuf(*order);
 
         // slice dimensions and strides:
         int W = data->dim[2].extent;
@@ -27,7 +27,7 @@ extern "C" int argsort(
 
         // Create runtime buffers for index and data:
         Halide::Runtime::Buffer<double> slice(W,H);
-        Halide::Runtime::Buffer<double> index(W,H);
+        Halide::Runtime::Buffer<uint16_t> index(W,H);
 
         // Sort along the first two data dimensions:
         for(int yo = 0; yo < data->dim[1].extent; yo++)
@@ -36,7 +36,7 @@ extern "C" int argsort(
             {
                 // Fill index:
                 index.for_each_element([&,W](int x, int y) {
-                    index(x,y) = double(y * W + x);
+                    index(x,y) = uint16_t(y * W + x);
                 });
 
                 // Fill slice data:

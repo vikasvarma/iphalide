@@ -4,6 +4,7 @@
 #include "bm3d.h"
 #include "util.h"
 #include <math.h>
+#include <ctime>
 
 using namespace Halide;
 using namespace Halide::Tools;
@@ -81,8 +82,8 @@ void bm3d_()
     };
 
     Halide::Runtime::Buffer<uint8_t> image(I);
-    Halide::Runtime::Buffer<double> scores(4,4,6,6);
-    Halide::Runtime::Buffer<uint16_t> order(4,4,6,6);
+    Halide::Runtime::Buffer<double> estimate(4,4,10,4,4);
+    Halide::Runtime::Buffer<uint16_t> matches(4,4,36);
 
     /**
     Rdom rWin; //5x5
@@ -92,26 +93,55 @@ void bm3d_()
     */
 
     double t0 = Halide::Tools::benchmark(2, 5, [&]() {
-        bm3d(image, 4, 4, 6, scores, order);
+        bm3d(image, 4, 4, 6, 10, matches, estimate);
     });
 
-    printf("In test code: \n\n");
-
-    for(int sx = 0; sx < 3; sx ++){
-        for(int sy = 0; sy < 3; sy ++){
-            printf("Distances[%d,%d]:\n",sx,sy);
-            for (int y = 0; y < 6; y++){
-                for (int x = 0; x < 6; x++){
-                    int ind = int(order(sx,sy,x,y));
-                    printf("%d | %.2f\n", ind, scores(sx,sy,ind%6,ind/6));
-                }
+    // Print the first block set:
+    for(int y = 0; y < 4; y++){
+        for(int x = 0; x < 4; x++){
+            printf("Matches[%d,%d]: ",x,y);
+            for(int z = 0; z < 36; z++){
+                printf("%d ", matches(x,y,z));
             }
             printf("\n");
-            printf("\n");
-        }
+        }    
     }
 
-    printf("BM3D Computed in: [%f msec]\n", t0);
+    printf("\n-------------------------------------------------------------\n");
+
+    // Print the first block set:
+    for(int y = 0; y < 4; y++){
+        for(int x = 0; x < 4; x++){
+            printf("Estimate[%d,%d]: \n",x,y);
+            for(int z = 0; z < 10; z++){
+                for(int by = 0; by < 4; by++){
+                    printf("\t");
+                    for(int bx = 0; bx < 4; bx++){
+                        printf("%.2f ", estimate(x,y,z,bx,by));
+                    }
+                    printf(";");
+                }
+                printf("\n");
+            }
+        }    
+    }
+
+    /*
+    for(int y = 0; y < 12; y++){
+        for(int x = 0; x < 12; x++){
+            printf("Block Coefficient[%d,%d]: ",x,y);
+                for(int by = 0; by < 4; by++){
+                    for(int bx = 0; bx < 4; bx++){
+                        printf("%f  ", coeff(x,y,bx,by));
+                    }
+                    printf("; ");
+                }
+                printf("\n");
+        }    
+    }
+    */
+
+    printf("BM3D Computed in: [%f sec]\n", t0);
 }
 
 int main(){
